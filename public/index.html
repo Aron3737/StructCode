@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StructCode</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>StructCode</h1>
+    <p>내 컴퓨터의 개발 프로젝트를 분류합니다</p>
+  </header>
+
+  <main>
+    <div class="search-bar">
+      <input id="pathInput" type="text" placeholder="스캔할 폴더 경로 입력 (예: ~/projects)" value="~" />
+      <button id="scanBtn" onclick="scan()">스캔</button>
+    </div>
+
+    <div id="stats" class="stats hidden"></div>
+    <div id="filters" class="filters hidden"></div>
+    <div id="results" class="results"></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
