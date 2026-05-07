@@ -1,60 +1,78 @@
-let allProjects = [];
+let allRepos = [];
 let activeFilter = 'all';
 
-async function scan() {
-  const path = document.getElementById('pathInput').value.trim() || '~';
-  const btn = document.getElementById('scanBtn');
+async function fetchRepos() {
+  const username = document.getElementById('usernameInput').value.trim();
+  if (!username) return;
+
+  const btn = document.getElementById('searchBtn');
   const results = document.getElementById('results');
 
   btn.disabled = true;
-  btn.textContent = '스캔 중...';
-  results.innerHTML = '<div class="message">폴더를 스캔하고 있습니다...</div>';
+  btn.textContent = '분석 중...';
+  results.innerHTML = '<div class="message">저장소를 불러오는 중...</div>';
   document.getElementById('stats').classList.add('hidden');
   document.getElementById('filters').classList.add('hidden');
 
   try {
-    const res = await fetch(`/api/scan?path=${encodeURIComponent(path)}`);
-    const data = await res.json();
-
-    if (!res.ok) {
-      results.innerHTML = `<div class="message">오류: ${data.error}</div>`;
-      return;
+    let page = 1;
+    let repos = [];
+    while (true) {
+      const res = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/repos?per_page=100&page=${page}`);
+      if (res.status === 404) {
+        results.innerHTML = '<div class="message">사용자를 찾을 수 없습니다.</div>';
+        return;
+      }
+      if (!res.ok) {
+        results.innerHTML = `<div class="message">오류가 발생했습니다. (${res.status})</div>`;
+        return;
+      }
+      const data = await res.json();
+      if (data.length === 0) break;
+      repos = repos.concat(data);
+      if (data.length < 100) break;
+      page++;
     }
 
-    allProjects = data.projects;
+    allRepos = repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
     activeFilter = 'all';
-    renderStats();
+    renderStats(username);
     renderFilters();
     renderCards();
   } catch (e) {
-    results.innerHTML = `<div class="message">서버에 연결할 수 없습니다.</div>`;
+    results.innerHTML = '<div class="message">네트워크 오류가 발생했습니다.</div>';
   } finally {
     btn.disabled = false;
-    btn.textContent = '스캔';
+    btn.textContent = '분석';
   }
 }
 
-function renderStats() {
-  const total = allProjects.length;
+function renderStats(username) {
+  const total = allRepos.length;
+  const stars = allRepos.reduce((s, r) => s + r.stargazers_count, 0);
   const langs = {};
-  allProjects.forEach(p => { langs[p.language] = (langs[p.language] || 0) + 1; });
-  const gitCount = allProjects.filter(p => p.has_git).length;
+  allRepos.forEach(r => {
+    if (r.language) langs[r.language] = (langs[r.language] || 0) + 1;
+  });
+  const topLangs = Object.entries(langs).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
   const statsEl = document.getElementById('stats');
   statsEl.innerHTML = `
-    <div class="stat-chip">전체 <span>${total}</span>개</div>
-    <div class="stat-chip">Git 연동 <span>${gitCount}</span>개</div>
-    ${Object.entries(langs).map(([l, n]) => `<div class="stat-chip">${l} <span>${n}</span></div>`).join('')}
+    <div class="stat-chip">저장소 <span>${total}</span>개</div>
+    <div class="stat-chip">총 스타 <span>${stars}</span></div>
+    ${topLangs.map(([l, n]) => `<div class="stat-chip">${l} <span>${n}</span></div>`).join('')}
   `;
   statsEl.classList.remove('hidden');
 }
 
 function renderFilters() {
-  const langs = ['all', ...new Set(allProjects.map(p => p.language))];
+  const langs = ['all', ...new Set(allRepos.map(r => r.language).filter(Boolean))
+    .values()].sort((a, b) => a === 'all' ? -1 : a.localeCompare(b));
+
   const filtersEl = document.getElementById('filters');
   filtersEl.innerHTML = langs.map(l =>
-    `<button class="filter-btn ${l === activeFilter ? 'active' : ''}" onclick="setFilter('${l}')">
-      ${l === 'all' ? '전체' : l}
+    `<button class="filter-btn ${l === activeFilter ? 'active' : ''}" onclick="setFilter('${esc(l)}')">
+      ${l === 'all' ? '전체' : esc(l)}
     </button>`
   ).join('');
   filtersEl.classList.remove('hidden');
@@ -68,35 +86,36 @@ function setFilter(lang) {
 
 function renderCards() {
   const filtered = activeFilter === 'all'
-    ? allProjects
-    : allProjects.filter(p => p.language === activeFilter);
+    ? allRepos
+    : allRepos.filter(r => r.language === activeFilter);
 
   const results = document.getElementById('results');
 
   if (filtered.length === 0) {
-    results.innerHTML = '<div class="message">프로젝트를 찾을 수 없습니다.</div>';
+    results.innerHTML = '<div class="message">저장소가 없습니다.</div>';
     return;
   }
 
-  results.innerHTML = filtered.map(p => `
+  results.innerHTML = filtered.map(r => `
     <div class="card">
-      <div class="card-header">
-        <div class="card-name">${escHtml(p.name)}</div>
-        ${p.has_git ? '<span class="git-badge">git</span>' : ''}
+      <div class="card-top">
+        <a class="card-name" href="${esc(r.html_url)}" target="_blank">${esc(r.name)}</a>
+        ${r.stargazers_count > 0 ? `<span class="card-stars">★ ${r.stargazers_count}</span>` : ''}
       </div>
+      ${r.description ? `<div class="card-desc">${esc(r.description)}</div>` : ''}
       <div class="badges">
-        <span class="badge badge-lang">${escHtml(p.language)}</span>
-        ${p.framework ? `<span class="badge badge-fw">${escHtml(p.framework)}</span>` : ''}
+        ${r.language ? `<span class="badge badge-lang">${esc(r.language)}</span>` : ''}
+        ${(r.topics || []).slice(0, 3).map(t => `<span class="badge badge-topic">${esc(t)}</span>`).join('')}
       </div>
-      <div class="card-path">${escHtml(p.path)}</div>
+      <div class="card-updated">업데이트: ${new Date(r.updated_at).toLocaleDateString('ko-KR')}</div>
     </div>
   `).join('');
 }
 
-function escHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function esc(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-document.getElementById('pathInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') scan();
+document.getElementById('usernameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') fetchRepos();
 });

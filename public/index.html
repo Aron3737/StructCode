@@ -9,13 +9,14 @@
 <body>
   <header>
     <h1>StructCode</h1>
-    <p>내 컴퓨터의 개발 프로젝트를 분류합니다</p>
+    <p>GitHub 저장소를 분석하고 분류합니다</p>
   </header>
 
   <main>
     <div class="search-bar">
-      <input id="pathInput" type="text" placeholder="스캔할 폴더 경로 입력 (예: ~/projects)" value="~" />
-      <button id="scanBtn" onclick="scan()">스캔</button>
+      <span class="prefix">github.com/</span>
+      <input id="usernameInput" type="text" placeholder="사용자명 입력 (예: aron3737)" />
+      <button id="searchBtn" onclick="fetchRepos()">분석</button>
     </div>
 
     <div id="stats" class="stats hidden"></div>
